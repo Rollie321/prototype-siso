@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { saveUploadMetadata, generatePresignedUploadUrlB2 } from "@/app/(app)/profile/actions";
 import { Loader2, UploadCloud } from "lucide-react";
-import { B2_BUCKET_PUBLIC_URL_BASE } from "@/lib/backblazeClient";
+import { NEXT_PUBLIC_BACKBLAZE_BUCKET_PUBLIC_URL_BASE } from "@/lib/backblazeClient";
 
 
 interface UploadAudioDialogProps {
@@ -84,7 +84,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       toast({ variant: "destructive", title: "No Title", description: "Please enter a title for your audio." });
       return;
     }
-    if (!B2_BUCKET_PUBLIC_URL_BASE) {
+    if (!NEXT_PUBLIC_BACKBLAZE_BUCKET_PUBLIC_URL_BASE) {
       toast({ variant: "destructive", title: "Configuration Error", description: "Bucket public URL base is not set." });
       return;
     }
@@ -114,17 +114,15 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         let b2ErrorMsg = `B2 upload failed with status: ${uploadResponse.status}`;
         try {
           const errorXmlOrJson = await uploadResponse.text();
-          // Try to parse as XML (B2 sometimes returns XML errors) or JSON
-          // This is a simplified error parsing attempt
-          if (errorXmlOrJson.startsWith('<')) { // Likely XML
+          if (errorXmlOrJson.startsWith('<')) {
             const codeMatch = errorXmlOrJson.match(/<Code>(.*?)<\/Code>/);
             const messageMatch = errorXmlOrJson.match(/<Message>(.*?)<\/Message>/);
             if (codeMatch && messageMatch) {
               b2ErrorMsg = `B2 Error (${codeMatch[1]}): ${messageMatch[1]}`;
-            } else if (errorXmlOrJson.length < 300) { // Short, potentially useful message
+            } else if (errorXmlOrJson.length < 300) {
                b2ErrorMsg = errorXmlOrJson;
             }
-          } else { // Potentially JSON or plain text
+          } else {
              if (errorXmlOrJson.length < 300) {
                 b2ErrorMsg = errorXmlOrJson;
              }
@@ -133,7 +131,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         throw new Error(b2ErrorMsg);
       }
 
-      const publicFileUrl = `${B2_BUCKET_PUBLIC_URL_BASE.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`;
+      const publicFileUrl = `${NEXT_PUBLIC_BACKBLAZE_BUCKET_PUBLIC_URL_BASE.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`;
 
       // 4. Save metadata to Firestore
       const metadata = {
@@ -160,8 +158,8 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
     } catch (error: any) {
       console.error("Upload failed:", error);
       let description = "An unexpected error occurred during upload. Please check your network connection and browser console for more details.";
-      if (error.message && (error.message.toLowerCase().includes("failed to fetch") || error.message.toLowerCase().includes("networkerror"))) {
-        description = "Failed to connect to the storage service. This might be a network issue or a CORS problem. Please ensure your Backblaze B2 bucket's CORS configuration is correctly set up to allow PUT requests from this origin. Check the Network tab in your browser's developer tools for further diagnostics.";
+       if (error.message && (error.message.toLowerCase().includes("failed to fetch"))) {
+        description = "Failed to connect to the storage service. This may be a network issue or a CORS problem. Please ensure your Backblaze B2 bucket's CORS configuration is correctly set up to allow PUT requests from your application's origin. Check the Network tab in your browser's developer tools for details.";
       } else if (error.message) {
         description = error.message;
       }
