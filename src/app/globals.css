@@ -26,8 +26,8 @@ body {
     --muted: 50 40% 92%; /* Muted Yellow */
     --muted-foreground: 240 5% 45%;
 
-    --accent: 300 100% 50%; /* Fuchsia */
-    --accent-foreground: 0 0% 98%; /* White text on fuchsia */
+    --accent: 50 100% 50%; /* Gold */
+    --accent-foreground: 240 10% 3.9%; /* Dark text on gold for better contrast */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
@@ -74,8 +74,8 @@ body {
     --muted: 240 10% 14.9%;
     --muted-foreground: 50 100% 80%; /* Lighter yellow for muted text */
 
-    --accent: 300 100% 50%; /* Fuchsia */
-    --accent-foreground: 0 0% 98%; /* White text on fuchsia */
+    --accent: 50 100% 50%; /* Gold */
+    --accent-foreground: 240 10% 3.9%; /* Dark text on gold for better contrast */
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
@@ -90,7 +90,7 @@ body {
     --sidebar-primary: 50 100% 50%; /* Gold */
     --sidebar-primary-foreground: 240 10% 3.9%;
     --sidebar-accent: 50 100% 45%; /* Dark Gold for hover */
-    --sidebar-accent-foreground: 50 100% 95%; /* Light text for dark gold */
+    --sidebar-accent-foreground: 240 10% 3.9%; /* Dark text for dark gold */
     --sidebar-border: 240 10% 12%;
     --sidebar-ring: 50 100% 50%; /* Gold */
 
