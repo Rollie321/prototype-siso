@@ -48,7 +48,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         });
         setFile(null);
         setFileNameDisplay(null);
-        e.target.value = ""; 
+        e.target.value = "";
         return;
       }
       if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
@@ -111,29 +111,36 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       });
 
       if (!uploadResponse.ok) {
-        // Attempt to get more detailed error from B2 if possible
         let b2ErrorMsg = `B2 upload failed with status: ${uploadResponse.status}`;
         try {
-          const errorXml = await uploadResponse.text();
-          const codeMatch = errorXml.match(/<Code>(.*?)<\/Code>/);
-          const messageMatch = errorXml.match(/<Message>(.*?)<\/Message>/);
-          if (codeMatch && messageMatch) {
-            b2ErrorMsg = `B2 Error (${codeMatch[1]}): ${messageMatch[1]}`;
-          } else if (errorXml.length < 200) { 
-            b2ErrorMsg = errorXml;
+          const errorXmlOrJson = await uploadResponse.text();
+          // Try to parse as XML (B2 sometimes returns XML errors) or JSON
+          // This is a simplified error parsing attempt
+          if (errorXmlOrJson.startsWith('<')) { // Likely XML
+            const codeMatch = errorXmlOrJson.match(/<Code>(.*?)<\/Code>/);
+            const messageMatch = errorXmlOrJson.match(/<Message>(.*?)<\/Message>/);
+            if (codeMatch && messageMatch) {
+              b2ErrorMsg = `B2 Error (${codeMatch[1]}): ${messageMatch[1]}`;
+            } else if (errorXmlOrJson.length < 300) { // Short, potentially useful message
+               b2ErrorMsg = errorXmlOrJson;
+            }
+          } else { // Potentially JSON or plain text
+             if (errorXmlOrJson.length < 300) {
+                b2ErrorMsg = errorXmlOrJson;
+             }
           }
         } catch (e) { /* Ignore parsing error, stick with status */ }
         throw new Error(b2ErrorMsg);
       }
-      
+
       const publicFileUrl = `${B2_BUCKET_PUBLIC_URL_BASE.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`;
 
       // 4. Save metadata to Firestore
       const metadata = {
         userId: currentUser.uid,
         title: title.trim(),
-        fileUrl: publicFileUrl, // This is the B2 public URL
-        storagePath: filePath, // This is the path within B2
+        fileUrl: publicFileUrl,
+        storagePath: filePath,
         fileName: file.name,
         fileType: file.type,
       };
@@ -145,28 +152,26 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       }
 
       toast({ title: "Upload Successful!", description: `"${title}" has been shared.` });
-      onUploadSuccess(); 
-      onOpenChange(false); 
-      setTitle("");
-      setFile(null);
-      setFileNameDisplay(null);
-      const fileInput = document.getElementById("audioFile-input") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
+      onUploadSuccess();
+      onOpenChange(false);
+      resetFormFields();
 
 
     } catch (error: any) {
       console.error("Upload failed:", error);
-      let description = error.message || "An unexpected error occurred.";
-      if (error.message && error.message.toLowerCase().includes("failed to fetch")) {
-        description += " This might be a CORS issue. Please check your Backblaze B2 bucket's CORS configuration to allow PUT requests from this origin.";
+      let description = "An unexpected error occurred during upload. Please check your network connection and browser console for more details.";
+      if (error.message && (error.message.toLowerCase().includes("failed to fetch") || error.message.toLowerCase().includes("networkerror"))) {
+        description = "Failed to connect to the storage service. This might be a network issue or a CORS problem. Please ensure your Backblaze B2 bucket's CORS configuration is correctly set up to allow PUT requests from this origin. Check the Network tab in your browser's developer tools for further diagnostics.";
+      } else if (error.message) {
+        description = error.message;
       }
       toast({ variant: "destructive", title: "Upload Failed", description });
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const resetForm = () => {
+
+  const resetFormFields = () => {
     setTitle("");
     setFile(null);
     setFileNameDisplay(null);
@@ -178,10 +183,10 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!isLoading) { 
+      if (!isLoading) {
         onOpenChange(open);
-        if (!open) { 
-         resetForm();
+        if (!open) {
+         resetFormFields();
         }
       }
     }}>
@@ -230,13 +235,13 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
                       </>
                     )}
                   </div>
-                  <Input 
-                    id="audioFile-input" 
-                    type="file" 
-                    className="hidden" 
-                    onChange={handleFileChange} 
-                    accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" 
-                    required 
+                  <Input
+                    id="audioFile-input"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
+                    required
                     disabled={isLoading}
                   />
                 </label>
@@ -245,7 +250,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isLoading} onClick={() => { if (!isLoading) onOpenChange(false); resetForm();}}>
+              <Button type="button" variant="outline" disabled={isLoading} onClick={() => { if (!isLoading) {onOpenChange(false); resetFormFields();}}}>
                 Cancel
               </Button>
             </DialogClose>
