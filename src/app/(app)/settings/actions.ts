@@ -3,7 +3,7 @@
 
 import { auth, db } from "@/lib/firebase";
 import { updateProfile } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore"; // Changed from updateDoc, removed getDoc and serverTimestamp for simplicity here
 
 export async function updateUsernameInFirestore(userId: string, newUsername: string): Promise<{ success: boolean; error?: string }> {
   if (!userId) {
@@ -14,24 +14,23 @@ export async function updateUsernameInFirestore(userId: string, newUsername: str
   }
 
   try {
-    // Update Firestore document
     const userDocRef = doc(db, "Siso_users", userId);
-    await updateDoc(userDocRef, {
+
+    // Using setDoc with merge: true ensures that the document is created if it doesn't exist,
+    // and if it does exist, only the specified fields are updated, preserving other existing fields.
+    // For this action, we are primarily concerned with setting/updating the username.
+    await setDoc(userDocRef, {
       username: newUsername,
-    });
+      // You could also add/update a 'lastUpdatedAt: serverTimestamp()' field here if needed.
+    }, { merge: true });
 
     // Update Firebase Auth display name if current user matches userId
-    // This part requires careful handling of auth state on the server or trusting the client to send its own UID.
-    // For direct server-side Firebase Admin SDK, you'd verify the user.
-    // With client SDK in server action, it relies on the client being authenticated.
-    // A more robust solution would use Firebase Admin SDK or pass an ID token for verification.
-    // For simplicity here, if this action is called by an authenticated user for themselves:
     if (auth.currentUser && auth.currentUser.uid === userId) {
       await updateProfile(auth.currentUser, { displayName: newUsername });
-    } else {
-      // If trying to update another user or auth state mismatch, this might be an issue.
-      // For this app, we assume user edits their own profile.
-      console.warn("Firebase Auth displayName not updated as current user does not match target userId or no current user.")
+    } else if (auth.currentUser && auth.currentUser.uid !== userId) {
+        console.warn(`User ${auth.currentUser.uid} is attempting to update username for ${userId}, but Firebase Auth displayName will not be updated for ${userId} by this action.`);
+    } else if (!auth.currentUser) {
+        console.warn("No Firebase Auth currentUser found. DisplayName not updated.");
     }
 
     return { success: true };
@@ -40,3 +39,4 @@ export async function updateUsernameInFirestore(userId: string, newUsername: str
     return { success: false, error: error.message || "Failed to update username." };
   }
 }
+

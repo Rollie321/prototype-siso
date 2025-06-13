@@ -9,9 +9,17 @@ import { createContext, useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 
 export interface SisoUser extends DocumentData {
-  userId: string;
-  email: string;
-  username: string;
+  userId: string; // This will be the Firebase UID, typically from docSnap.id
+  username: string; // Should always be present if SisoUser object is formed
+  email?: string;  // Email from Firebase Auth, might not always be in Firestore doc if created minimally
+  createdAt?: string; // Timestamp of creation, typically set during signup
+  location?: string;
+  bio?: string;
+  skills?: string[];
+  experience?: string;
+  influences?: string[];
+  genres?: string[];
+  // Add any other fields that might be part of a Siso user's profile
 }
 
 interface AuthContextType {
@@ -35,18 +43,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (user) => {
         setCurrentUser(user);
         if (user) {
-          // User is signed in, now listen for Firestore profile changes
           const userDocRef = doc(db, 'Siso_users', user.uid);
           const unsubscribeFirestore = onSnapshot(
             userDocRef,
             (docSnap) => {
               if (docSnap.exists()) {
-                setSisoUser({ userId: docSnap.id, ...docSnap.data() } as SisoUser);
+                // Ensure that the data is correctly typed according to the SisoUser interface
+                const data = docSnap.data();
+                setSisoUser({
+                  userId: docSnap.id,
+                  username: data.username, // username is expected
+                  email: data.email, // email is optional
+                  createdAt: data.createdAt, // createdAt is optional
+                  location: data.location,
+                  bio: data.bio,
+                  skills: data.skills,
+                  experience: data.experience,
+                  influences: data.influences,
+                  genres: data.genres,
+                  ...data, // Spread remaining data
+                } as SisoUser);
               } else {
-                // Siso profile doesn't exist, might happen if created before this logic
-                // Or if user signed up but Firestore write failed.
-                // You might want to create it here or prompt user.
-                console.warn(`Siso user profile not found for UID: ${user.uid}`);
+                console.warn(`Siso user profile not found for UID: ${user.uid}. A minimal profile might be created on first edit.`);
+                // If the Siso_users doc doesn't exist, we might want to reflect that sisoUser is not fully populated yet.
+                // Setting sisoUser to null, or a minimal SisoUser object with just UID and perhaps a placeholder username from auth.currentUser.displayName
+                // For example, to ensure sisoUser is not null if currentUser is present:
+                // setSisoUser({ userId: user.uid, username: user.displayName || "New User" });
                 setSisoUser(null); 
               }
               setLoading(false);
@@ -58,9 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setLoading(false);
             }
           );
-          return () => unsubscribeFirestore(); // Cleanup Firestore listener on user change or unmount
+          return () => unsubscribeFirestore();
         } else {
-          // No user signed in
           setSisoUser(null);
           setLoading(false);
         }
@@ -74,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => unsubscribeAuth(); // Cleanup Auth listener on component unmount
+    return () => unsubscribeAuth();
   }, []);
 
   const value = { currentUser, sisoUser, loading, error };
