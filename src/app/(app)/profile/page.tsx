@@ -1,31 +1,78 @@
+
+"use client";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { placeholderMusicians } from "@/lib/placeholder-data";
+import { placeholderMusicians } from "@/lib/placeholder-data"; // Keep for structure, but data will come from auth
 import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-
-// Assume current user is the first placeholder musician
-const currentUser = placeholderMusicians[0];
+import { useAuthContext } from "@/hooks/use-auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProfilePage() {
+  const { currentUser, sisoUser, loading } = useAuthContext();
+
+  // Data to display, prioritize sisoUser, then currentUser, then fallbacks
+  const displayName = sisoUser?.username || currentUser?.displayName || "User";
+  const location = sisoUser?.location || "Unknown location";
+  const bio = sisoUser?.bio || "No bio available.";
+  const skills = sisoUser?.skills || [];
+  const experience = sisoUser?.experience || "No experience listed.";
+  const influences = sisoUser?.influences || [];
+  const profileImage = currentUser?.photoURL || `https://placehold.co/150x150.png?text=${displayName.substring(0,2)}`;
+
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-24 w-24 rounded-full" />
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-5 w-32" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Separator />
+        {/* Add more skeletons for cards as needed */}
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+     // This should be caught by AppLayout, but as a fallback:
+    return (
+      <div className="text-center py-10">
+        <h1 className="text-2xl font-bold">Please log in</h1>
+        <p className="text-muted-foreground">You need to be logged in to view your profile.</p>
+        <Button asChild className="mt-4">
+          <Link href="/login">Login</Link>
+        </Button>
+      </div>
+    );
+  }
+  
+  // For now, placeholder data for skills, influences etc. if not in sisoUser
+  // These would ideally come from Firestore `Siso_users` document.
+  const currentMusicianData = placeholderMusicians[0]; // Use as a fallback for now for structure
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-24 w-24 border-4 border-primary">
-            <AvatarImage src={currentUser.profileImage} alt={currentUser.name} data-ai-hint="musician portrait" />
-            <AvatarFallback>{currentUser.name.substring(0, 2)}</AvatarFallback>
+            <AvatarImage src={profileImage} alt={displayName} data-ai-hint="musician portrait" />
+            <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-3xl font-bold font-headline">{currentUser.name}</h1>
+            <h1 className="text-3xl font-bold font-headline">{displayName}</h1>
             <p className="text-muted-foreground flex items-center gap-1">
-              <MapPin className="h-4 w-4" /> {currentUser.location}
+              <MapPin className="h-4 w-4" /> {location || currentMusicianData.location}
             </p>
           </div>
         </div>
@@ -45,7 +92,7 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center gap-2"><Music className="h-5 w-5 text-primary" /> About Me</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-foreground whitespace-pre-line">{currentUser.bio}</p>
+              <p className="text-foreground whitespace-pre-line">{bio || currentMusicianData.bio}</p>
             </CardContent>
           </Card>
 
@@ -57,14 +104,14 @@ export default function ProfilePage() {
               <div>
                 <h3 className="font-semibold">Skills:</h3>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {currentUser.skills.map(skill => (
+                  {(skills.length > 0 ? skills : currentMusicianData.skills).map((skill: string) => (
                     <span key={skill} className="px-3 py-1 text-sm rounded-full bg-secondary text-secondary-foreground">{skill}</span>
                   ))}
                 </div>
               </div>
               <div>
                 <h3 className="font-semibold">Experience:</h3>
-                <p className="text-foreground">{currentUser.experience}</p>
+                <p className="text-foreground">{experience || currentMusicianData.experience}</p>
               </div>
             </CardContent>
           </Card>
@@ -75,7 +122,7 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {currentUser.influences.map(influence => (
+                {(influences.length > 0 ? influences : currentMusicianData.influences).map((influence: string) => (
                   <span key={influence} className="px-3 py-1 text-sm rounded-full border border-primary text-primary">{influence}</span>
                 ))}
               </div>
