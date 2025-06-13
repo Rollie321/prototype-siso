@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { supabase, AUDIO_BUCKET_NAME } from "@/lib/supabase";
-import { saveAudioPostMetadata } from "@/app/(app)/profile/actions";
+import { saveUploadMetadata } from "@/app/(app)/profile/actions"; // Updated import if function name changed
 import { Loader2, UploadCloud } from "lucide-react";
 
 interface UploadAudioDialogProps {
@@ -44,6 +44,17 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
           variant: "destructive",
           title: "Invalid File Type",
           description: "Please select an MP3, WAV, or OGG file.",
+        });
+        setFile(null);
+        setFileNameDisplay(null);
+        e.target.value = ""; // Reset file input
+        return;
+      }
+      if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: "Please select a file smaller than 20MB.",
         });
         setFile(null);
         setFileNameDisplay(null);
@@ -118,10 +129,10 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         fileType: file.type,
       };
 
-      const saveResult = await saveAudioPostMetadata(metadata);
+      const saveResult = await saveUploadMetadata(metadata); // Using the updated function name implicitly
 
       if (!saveResult.success) {
-        throw new Error(saveResult.error || "Failed to save audio metadata.");
+        throw new Error(saveResult.error || "Failed to save upload metadata.");
       }
 
       toast({ title: "Upload Successful!", description: `"${title}" has been shared.` });
@@ -140,7 +151,16 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!isLoading) { // Prevent closing while loading
+        onOpenChange(open);
+        if (!open) { // Reset form if dialog is closed
+          setTitle("");
+          setFile(null);
+          setFileNameDisplay(null);
+        }
+      }
+    }}>
       <DialogContent className="sm:max-w-[480px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -161,16 +181,17 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
                 className="col-span-3"
                 placeholder="Your track title"
                 required
+                disabled={isLoading}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="audioFile" className="text-right">
+              <Label htmlFor="audioFile-input" className="text-right">
                 Audio File
               </Label>
               <div className="col-span-3">
                  <label
                   htmlFor="audioFile-input"
-                  className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted/50"
+                  className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-lg ${isLoading ? 'cursor-not-allowed bg-muted/50' : 'cursor-pointer bg-card hover:bg-muted/50'}`}
                 >
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
@@ -192,6 +213,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
                     onChange={handleFileChange} 
                     accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" 
                     required 
+                    disabled={isLoading}
                   />
                 </label>
               </div>
@@ -205,7 +227,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
             </DialogClose>
             <Button type="submit" disabled={isLoading}>
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              Upload & Share
+              {isLoading ? "Uploading..." : "Upload & Share"}
             </Button>
           </DialogFooter>
         </form>

@@ -55,32 +55,32 @@ export async function updateUserProfile(
   }
 }
 
-export interface AudioPostMetadata {
-  userId: string;
+export interface UploadMetadata {
+  userId: string; // Owner
   title: string;
-  audioUrl: string;
+  audioUrl: string; // Reference to access the file in Supabase
   supabasePath: string;
   fileName: string;
   fileType: string;
   createdAt: any; // Will be Firestore serverTimestamp
 }
 
-export async function saveAudioPostMetadata(
-  metadata: Omit<AudioPostMetadata, 'createdAt'>
+export async function saveUploadMetadata(
+  metadata: Omit<UploadMetadata, 'createdAt'>
 ): Promise<{ success: boolean; error?: string; id?: string }> {
   if (!metadata.userId || !metadata.title || !metadata.audioUrl || !metadata.supabasePath) {
-    return { success: false, error: "Missing required audio metadata." };
+    return { success: false, error: "Missing required upload metadata." };
   }
 
   try {
-    const audioPostsCollectionRef = collection(db, "Siso_audio_posts");
-    const docRef = await addDoc(audioPostsCollectionRef, {
+    const uploadsCollectionRef = collection(db, "Siso_uploads"); // Changed collection name
+    const docRef = await addDoc(uploadsCollectionRef, {
       ...metadata,
       createdAt: serverTimestamp(),
     });
     return { success: true, id: docRef.id };
   } catch (error: any) {
-    console.error("Error saving audio post metadata:", error);
-    return { success: false, error: error.message || "Failed to save audio metadata." };
+    console.error("Error saving upload metadata:", error);
+    return { success: false, error: error.message || "Failed to save upload metadata." };
   }
 }
