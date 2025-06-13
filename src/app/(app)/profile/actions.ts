@@ -9,7 +9,7 @@ import type { SisoUser } from "@/contexts/auth-context";
 // Moved S3Client imports and initialization here as it's server-side only
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { B2_BUCKET_NAME } from "@/lib/backblazeClient"; // B2_BUCKET_NAME is NEXT_PUBLIC_
+import { NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME } from "@/lib/backblazeClient"; 
 
 
 export type UpdateUserProfileData = {
@@ -99,12 +99,14 @@ function getB2S3Client() {
   if (!B2_KEY_ID || !B2_APPLICATION_KEY || !B2_S3_ENDPOINT) {
     throw new Error("Missing Backblaze B2 server-side environment variables for S3 client configuration.");
   }
-
+  
+  // Extract region from endpoint if possible, otherwise default or use a known one
+  // Example: s3.us-west-000.backblazeb2.com -> us-west-000
   const regionMatch = B2_S3_ENDPOINT.match(/^s3\.([a-zA-Z0-9-]+)\.backblazeb2\.com$/);
-  const B2_REGION = regionMatch ? regionMatch[1] : "us-east-1";
+  const B2_REGION = regionMatch ? regionMatch[1] : "us-east-1"; // Default to a common region if parse fails
 
   return new S3Client({
-    endpoint: `https://${B2_S3_ENDPOINT}`,
+    endpoint: `https://${B2_S3_ENDPOINT}`, // Ensure https
     region: B2_REGION,
     credentials: {
       accessKeyId: B2_KEY_ID,
@@ -122,11 +124,11 @@ export async function generatePresignedUploadUrlB2(
   if (!userId) {
     return { success: false, error: "User ID is required to generate upload URL." };
   }
-  if (!B2_BUCKET_NAME) { // B2_BUCKET_NAME comes from NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME
+  if (!NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME) { 
     return { success: false, error: "Backblaze B2 bucket name is not configured (NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME)." };
   }
 
-  const b2S3Client = getB2S3Client(); // Initialize client here
+  const b2S3Client = getB2S3Client(); 
 
   const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const uniqueFileName = `${Date.now()}-${sanitizedFileName}`;
@@ -134,12 +136,18 @@ export async function generatePresignedUploadUrlB2(
 
   try {
     const command = new PutObjectCommand({
-      Bucket: B2_BUCKET_NAME,
+      Bucket: NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME,
       Key: filePath,
       ContentType: fileType,
+      // ACL: 'public-read', // If you want to make files public on upload via ACL (B2 might handle this differently, often via bucket settings)
+      ChecksumAlgorithm: undefined, // Explicitly disable SDK from adding its own checksum headers/params
     });
 
-    const uploadUrl = await getSignedUrl(b2S3Client, command, { expiresIn: 300 }); // URL expires in 5 minutes
+    const uploadUrl = await getSignedUrl(b2S3Client, command, { 
+        expiresIn: 300, // URL expires in 5 minutes
+        // By default, getSignedUrl for PutObjectCommand uses 'UNSIGNED-PAYLOAD' for browsers.
+        // No explicit unsignPayload: true should be needed for PutObject in most SDK versions >= 3.188.0 for browser uploads.
+    });
 
     return { success: true, uploadUrl, filePath };
   } catch (error: any) {
@@ -147,3 +155,4 @@ export async function generatePresignedUploadUrlB2(
     return { success: false, error: error.message || "Failed to generate upload URL." };
   }
 }
+
