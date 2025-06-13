@@ -17,8 +17,8 @@ body {
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    --primary: 50 95% 55%; /* Vibrant Yellow */
-    --primary-foreground: 240 10% 3.9%; /* Dark text on yellow */
+    --primary: 50 100% 50%; /* Gold */
+    --primary-foreground: 240 10% 3.9%; /* Dark text on gold */
 
     --secondary: 50 60% 90%; /* Lighter Yellow for secondary elements */
     --secondary-foreground: 240 10% 9%;
@@ -34,21 +34,21 @@ body {
 
     --border: 50 20% 85%; /* Light yellow-grey border */
     --input: 50 20% 90%; /* Slightly darker light yellow-grey for inputs */
-    --ring: 50 95% 55%; /* Primary yellow for focus rings */
+    --ring: 50 100% 50%; /* Gold for focus rings */
 
     --radius: 0.5rem;
 
     /* Sidebar specific theme (can be adjusted if needed) */
     --sidebar-background: 50 30% 90%; /* Muted Yellow */
     --sidebar-foreground: 240 10% 20%; /* Darker text for sidebar */
-    --sidebar-primary: 50 95% 55%; /* Vibrant Yellow for active/hover states */
+    --sidebar-primary: 50 100% 50%; /* Gold for active/hover states */
     --sidebar-primary-foreground: 240 10% 3.9%;
-    --sidebar-accent: 50 95% 65%; /* Lighter Yellow for hover */
+    --sidebar-accent: 50 100% 60%; /* Lighter Gold for hover */
     --sidebar-accent-foreground: 240 10% 3.9%;
     --sidebar-border: 50 20% 80%;
-    --sidebar-ring: 50 95% 55%;
+    --sidebar-ring: 50 100% 50%; /* Gold */
 
-    --chart-1: 50 95% 55%;
+    --chart-1: 50 100% 50%; /* Gold */
     --chart-2: 300 100% 50%;
     --chart-3: 197 37% 34%;
     --chart-4: 43 74% 66%;
@@ -65,8 +65,8 @@ body {
     --popover: 240 10% 3.9%;
     --popover-foreground: 50 100% 95%;
 
-    --primary: 50 95% 55%; /* Vibrant Yellow */
-    --primary-foreground: 240 10% 3.9%; /* Dark text on yellow */
+    --primary: 50 100% 50%; /* Gold */
+    --primary-foreground: 240 10% 3.9%; /* Dark text on gold */
 
     --secondary: 240 10% 14.9%;
     --secondary-foreground: 50 100% 95%;
@@ -82,19 +82,19 @@ body {
 
     --border: 240 10% 14.9%;
     --input: 240 10% 14.9%;
-    --ring: 50 95% 55%; /* Primary yellow for focus rings */
+    --ring: 50 100% 50%; /* Gold for focus rings */
     
     /* Dark Sidebar specific theme */
     --sidebar-background: 240 10% 8%; 
     --sidebar-foreground: 50 100% 90%; 
-    --sidebar-primary: 50 95% 55%; 
+    --sidebar-primary: 50 100% 50%; /* Gold */
     --sidebar-primary-foreground: 240 10% 3.9%;
-    --sidebar-accent: 50 95% 45%; 
-    --sidebar-accent-foreground: 50 100% 95%;
+    --sidebar-accent: 50 100% 45%; /* Dark Gold for hover */
+    --sidebar-accent-foreground: 50 100% 95%; /* Light text for dark gold */
     --sidebar-border: 240 10% 12%;
-    --sidebar-ring: 50 95% 55%;
+    --sidebar-ring: 50 100% 50%; /* Gold */
 
-    --chart-1: 50 95% 55%;
+    --chart-1: 50 100% 50%; /* Gold */
     --chart-2: 300 100% 50%;
     --chart-3: 197 37% 44%;
     --chart-4: 43 74% 56%;
