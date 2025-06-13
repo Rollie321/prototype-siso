@@ -5,8 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { placeholderMusicians } from "@/lib/placeholder-data"; // Keep for structure, but data will come from auth
-import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2 } from "lucide-react";
+import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2, Link as LinkIcon, Youtube, ListMusic } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuthContext } from "@/hooks/use-auth-context";
@@ -15,14 +14,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function ProfilePage() {
   const { currentUser, sisoUser, loading } = useAuthContext();
 
-  // Data to display, prioritize sisoUser, then currentUser, then fallbacks
-  const displayName = sisoUser?.username || currentUser?.displayName || "User";
+  const displayName = sisoUser?.fullName || sisoUser?.username || currentUser?.displayName || "User";
   const location = sisoUser?.location || "Unknown location";
   const bio = sisoUser?.bio || "No bio available.";
   const skills = sisoUser?.skills || [];
   const experience = sisoUser?.experience || "No experience listed.";
   const influences = sisoUser?.influences || [];
-  const profileImage = currentUser?.photoURL || `https://placehold.co/150x150.png?text=${displayName.substring(0,2)}`;
+  const genres = sisoUser?.genres || [];
+  const profileImage = currentUser?.photoURL || `https://placehold.co/150x150.png?text=${(sisoUser?.username || displayName).substring(0,2)}`;
+  const spotifyLink = sisoUser?.spotifyLink;
+  const youtubeLink = sisoUser?.youtubeLink;
 
 
   if (loading) {
@@ -39,13 +40,23 @@ export default function ProfilePage() {
           <Skeleton className="h-10 w-32" />
         </div>
         <Separator />
-        {/* Add more skeletons for cards as needed */}
+        <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+                <Skeleton className="h-40 w-full" />
+                <Skeleton className="h-40 w-full" />
+                <Skeleton className="h-32 w-full" />
+            </div>
+            <div className="space-y-6">
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-20 w-full" />
+            </div>
+        </div>
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   if (!currentUser) {
-     // This should be caught by AppLayout, but as a fallback:
     return (
       <div className="text-center py-10">
         <h1 className="text-2xl font-bold">Please log in</h1>
@@ -57,22 +68,19 @@ export default function ProfilePage() {
     );
   }
   
-  // For now, placeholder data for skills, influences etc. if not in sisoUser
-  // These would ideally come from Firestore `Siso_users` document.
-  const currentMusicianData = placeholderMusicians[0]; // Use as a fallback for now for structure
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-24 w-24 border-4 border-primary">
             <AvatarImage src={profileImage} alt={displayName} data-ai-hint="musician portrait" />
-            <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{(sisoUser?.username || displayName).substring(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div>
             <h1 className="text-3xl font-bold font-headline">{displayName}</h1>
-            <p className="text-muted-foreground flex items-center gap-1">
-              <MapPin className="h-4 w-4" /> {location || currentMusicianData.location}
+            { (sisoUser?.username && sisoUser.username !== displayName) && <p className="text-sm text-muted-foreground">@{sisoUser.username}</p>}
+            <p className="text-muted-foreground flex items-center gap-1 mt-1">
+              <MapPin className="h-4 w-4" /> {location}
             </p>
           </div>
         </div>
@@ -92,7 +100,24 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center gap-2"><Music className="h-5 w-5 text-primary" /> About Me</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-foreground whitespace-pre-line">{bio || currentMusicianData.bio}</p>
+              <p className="text-foreground whitespace-pre-line">{bio}</p>
+            </CardContent>
+          </Card>
+
+           <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><ListMusic className="h-5 w-5 text-primary" />Genres</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {genres.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {genres.map((genre: string) => (
+                    <span key={genre} className="px-3 py-1 text-sm rounded-full bg-secondary text-secondary-foreground">{genre}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No genres listed yet.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -103,15 +128,19 @@ export default function ProfilePage() {
             <CardContent className="space-y-3">
               <div>
                 <h3 className="font-semibold">Skills:</h3>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {(skills.length > 0 ? skills : currentMusicianData.skills).map((skill: string) => (
-                    <span key={skill} className="px-3 py-1 text-sm rounded-full bg-secondary text-secondary-foreground">{skill}</span>
-                  ))}
-                </div>
+                {skills.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                    {skills.map((skill: string) => (
+                        <span key={skill} className="px-3 py-1 text-sm rounded-full bg-secondary text-secondary-foreground">{skill}</span>
+                    ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground mt-1">No skills listed yet.</p>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold">Experience:</h3>
-                <p className="text-foreground">{experience || currentMusicianData.experience}</p>
+                <p className="text-foreground whitespace-pre-line">{experience || "No experience detailed."}</p>
               </div>
             </CardContent>
           </Card>
@@ -121,11 +150,15 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center gap-2"><Mic2 className="h-5 w-5 text-primary" />Musical Influences</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {(influences.length > 0 ? influences : currentMusicianData.influences).map((influence: string) => (
-                  <span key={influence} className="px-3 py-1 text-sm rounded-full border border-primary text-primary">{influence}</span>
-                ))}
-              </div>
+              {influences.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {influences.map((influence: string) => (
+                    <span key={influence} className="px-3 py-1 text-sm rounded-full border border-primary text-primary">{influence}</span>
+                  ))}
+                </div>
+              ) : (
+                 <p className="text-sm text-muted-foreground">No influences listed yet.</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -136,13 +169,37 @@ export default function ProfilePage() {
               <CardTitle className="font-headline flex items-center gap-2"><UsersIcon className="h-5 w-5 text-primary" />My Groups</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Placeholder for user's groups */}
               <p className="text-sm text-muted-foreground">You are not part of any groups yet.</p>
               <Button className="w-full" asChild>
                 <Link href="/groups/create">Create a Group</Link>
               </Button>
             </CardContent>
           </Card>
+
+          {(spotifyLink || youtubeLink) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><LinkIcon className="h-5 w-5 text-primary" /> External Links</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {spotifyLink && (
+                  <Button variant="outline" asChild className="w-full justify-start">
+                    <a href={spotifyLink} target="_blank" rel="noopener noreferrer">
+                      <ListMusic className="mr-2 h-4 w-4" /> Spotify
+                    </a>
+                  </Button>
+                )}
+                {youtubeLink && (
+                  <Button variant="outline" asChild className="w-full justify-start">
+                    <a href={youtubeLink} target="_blank" rel="noopener noreferrer">
+                      <Youtube className="mr-2 h-4 w-4" /> YouTube
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Settings2 className="h-5 w-5 text-primary" />Account Settings</CardTitle>
@@ -162,10 +219,9 @@ export default function ProfilePage() {
           <CardDescription>Tracks and ideas you&apos;ve shared on Siso.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Placeholder for user's audio posts */}
           {[1,2,3].map(i => (
             <Card key={i} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <Image src={`https://placehold.co/300x180.png`} data-ai-hint="album art music" alt={`Track ${i}`} width={300} height={180} className="w-full aspect-[5/3] object-cover" />
+              <Image src={'https://placehold.co/300x180.png'} data-ai-hint="album art music" alt={`Track ${i}`} width={300} height={180} className="w-full aspect-[5/3] object-cover" />
               <CardContent className="p-4">
                 <h3 className="font-semibold">My Track Title {i}</h3>
                 <p className="text-sm text-muted-foreground">Shared 2 days ago</p>
