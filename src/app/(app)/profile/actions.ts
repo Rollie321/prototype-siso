@@ -3,11 +3,14 @@
 
 import { auth, db } from "@/lib/firebase";
 import { updateProfile } from "firebase/auth";
-import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import type { SisoUser } from "@/contexts/auth-context";
+
+// Moved S3Client imports and initialization here as it's server-side only
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { b2S3Client, B2_BUCKET_NAME } from "@/lib/backblazeClient";
+import { B2_BUCKET_NAME } from "@/lib/backblazeClient"; // B2_BUCKET_NAME is NEXT_PUBLIC_
+
 
 export type UpdateUserProfileData = {
   fullName?: string;
@@ -58,11 +61,11 @@ export async function updateUserProfile(
   }
 }
 
-export interface UploadMetadataInput { // Renamed from UploadMetadata for clarity with Firestore type
+export interface UploadMetadataInput {
   userId: string;
   title: string;
-  fileUrl: string; // Public URL of the file (e.g., on Backblaze B2)
-  storagePath: string; // Path within the storage service (e.g., public/userId/filename.ext)
+  fileUrl: string; 
+  storagePath: string; 
   fileName: string;
   fileType: string;
 }
@@ -87,6 +90,30 @@ export async function saveUploadMetadata(
   }
 }
 
+// Function to initialize B2 S3 client (only on server)
+function getB2S3Client() {
+  const B2_KEY_ID = process.env.BACKBLAZE_KEY_ID;
+  const B2_APPLICATION_KEY = process.env.BACKBLAZE_APPLICATION_KEY;
+  const B2_S3_ENDPOINT = process.env.BACKBLAZE_S3_ENDPOINT;
+
+  if (!B2_KEY_ID || !B2_APPLICATION_KEY || !B2_S3_ENDPOINT) {
+    throw new Error("Missing Backblaze B2 server-side environment variables for S3 client configuration.");
+  }
+
+  const regionMatch = B2_S3_ENDPOINT.match(/^s3\.([a-zA-Z0-9-]+)\.backblazeb2\.com$/);
+  const B2_REGION = regionMatch ? regionMatch[1] : "us-east-1";
+
+  return new S3Client({
+    endpoint: `https://${B2_S3_ENDPOINT}`,
+    region: B2_REGION,
+    credentials: {
+      accessKeyId: B2_KEY_ID,
+      secretAccessKey: B2_APPLICATION_KEY,
+    },
+  });
+}
+
+
 export async function generatePresignedUploadUrlB2(
   originalFileName: string,
   fileType: string,
@@ -95,11 +122,12 @@ export async function generatePresignedUploadUrlB2(
   if (!userId) {
     return { success: false, error: "User ID is required to generate upload URL." };
   }
-  if (!B2_BUCKET_NAME) {
-    return { success: false, error: "Backblaze B2 bucket name is not configured." };
+  if (!B2_BUCKET_NAME) { // B2_BUCKET_NAME comes from NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME
+    return { success: false, error: "Backblaze B2 bucket name is not configured (NEXT_PUBLIC_BACKBLAZE_BUCKET_NAME)." };
   }
 
-  // Sanitize filename and create a unique path
+  const b2S3Client = getB2S3Client(); // Initialize client here
+
   const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const uniqueFileName = `${Date.now()}-${sanitizedFileName}`;
   const filePath = `public/${userId}/${uniqueFileName}`;
@@ -109,7 +137,6 @@ export async function generatePresignedUploadUrlB2(
       Bucket: B2_BUCKET_NAME,
       Key: filePath,
       ContentType: fileType,
-      // ACL: 'public-read', // If you want to make files public immediately. B2 might handle this via bucket settings.
     });
 
     const uploadUrl = await getSignedUrl(b2S3Client, command, { expiresIn: 300 }); // URL expires in 5 minutes
