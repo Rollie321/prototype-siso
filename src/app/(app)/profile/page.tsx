@@ -5,14 +5,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2, Link as LinkIcon, Youtube, ListMusic } from "lucide-react";
+import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2, Link as LinkIcon, Youtube, ListMusic, UploadCloud } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
   const { currentUser, sisoUser, loading } = useAuthContext();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const displayName = sisoUser?.fullName || sisoUser?.username || currentUser?.displayName || "User";
   const location = sisoUser?.location || "Unknown location";
@@ -24,6 +28,25 @@ export default function ProfilePage() {
   const profileImage = currentUser?.photoURL || `https://placehold.co/150x150.png?text=${(sisoUser?.username || displayName).substring(0,2)}`;
   const spotifyLink = sisoUser?.spotifyLink;
   const youtubeLink = sisoUser?.youtubeLink;
+
+  const handleUploadAudioClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAudioFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      console.log("Selected audio file:", file);
+      toast({
+        title: "Audio File Selected",
+        description: `${file.name} is ready. Backend for Supabase upload is not yet implemented.`,
+      });
+      // Reset file input value so the same file can be selected again if needed
+      if(fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
 
   if (loading) {
@@ -214,9 +237,21 @@ export default function ProfilePage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">My Shared Audio</CardTitle>
-          <CardDescription>Tracks and ideas you&apos;ve shared on Siso.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="font-headline">My Shared Audio</CardTitle>
+            <CardDescription>Tracks and ideas you&apos;ve shared on Siso.</CardDescription>
+          </div>
+          <Button onClick={handleUploadAudioClick}>
+            <UploadCloud className="mr-2 h-4 w-4" /> Upload Audio
+          </Button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAudioFileChange}
+            accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
+            className="hidden"
+          />
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1,2,3].map(i => (
@@ -235,3 +270,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
