@@ -5,18 +5,36 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2, Link as LinkIcon, Youtube, ListMusic, UploadCloud } from "lucide-react";
+import { Edit3, Music, MapPin, Users as UsersIcon, Guitar, Mic2, Settings2, Link as LinkIcon, Youtube, ListMusic, UploadCloud, PlayCircle, Download, AlertTriangle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { UploadAudioDialog } from "@/components/profile/upload-audio-dialog";
+import { collection, query, where, getDocs, orderBy, Timestamp, type DocumentData } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { formatDistanceToNow } from 'date-fns';
+
+
+interface AudioPost extends DocumentData {
+  id: string;
+  userId: string;
+  title: string;
+  audioUrl: string;
+  supabasePath: string;
+  fileName: string;
+  fileType: string;
+  createdAt: Timestamp; // Firestore Timestamp
+}
 
 export default function ProfilePage() {
-  const { currentUser, sisoUser, loading } = useAuthContext();
+  const { currentUser, sisoUser, loading: authLoading } = useAuthContext();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadAudioDialogOpen, setIsUploadAudioDialogOpen] = useState(false);
+  const [userAudioPosts, setUserAudioPosts] = useState<AudioPost[]>([]);
+  const [audioLoading, setAudioLoading] = useState(true);
 
   const displayName = sisoUser?.fullName || sisoUser?.username || currentUser?.displayName || "User";
   const location = sisoUser?.location || "Unknown location";
@@ -29,27 +47,38 @@ export default function ProfilePage() {
   const spotifyLink = sisoUser?.spotifyLink;
   const youtubeLink = sisoUser?.youtubeLink;
 
-  const handleUploadAudioClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleAudioFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      console.log("Selected audio file:", file);
-      toast({
-        title: "Audio File Selected",
-        description: `${file.name} is ready. Backend for Supabase upload is not yet implemented.`,
-      });
-      // Reset file input value so the same file can be selected again if needed
-      if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+  const fetchUserAudioPosts = useCallback(async () => {
+    if (!currentUser?.uid) return;
+    setAudioLoading(true);
+    try {
+      const q = query(
+        collection(db, "Siso_audio_posts"), 
+        where("userId", "==", currentUser.uid),
+        orderBy("createdAt", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const posts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AudioPost));
+      setUserAudioPosts(posts);
+    } catch (error) {
+      console.error("Error fetching audio posts:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not fetch your audio posts." });
+    } finally {
+      setAudioLoading(false);
     }
+  }, [currentUser?.uid, toast]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchUserAudioPosts();
+    }
+  }, [currentUser, fetchUserAudioPosts]);
+
+  const handleUploadSuccess = () => {
+    fetchUserAudioPosts(); // Refresh list after successful upload
   };
 
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -92,6 +121,7 @@ export default function ProfilePage() {
   }
   
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -242,33 +272,68 @@ export default function ProfilePage() {
             <CardTitle className="font-headline">My Shared Audio</CardTitle>
             <CardDescription>Tracks and ideas you&apos;ve shared on Siso.</CardDescription>
           </div>
-          <Button onClick={handleUploadAudioClick}>
+          <Button onClick={() => setIsUploadAudioDialogOpen(true)}>
             <UploadCloud className="mr-2 h-4 w-4" /> Upload Audio
           </Button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleAudioFileChange}
-            accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
-            className="hidden"
-          />
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1,2,3].map(i => (
-            <Card key={i} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <Image src={'https://placehold.co/300x180.png'} data-ai-hint="album art music" alt={`Track ${i}`} width={300} height={180} className="w-full aspect-[5/3] object-cover" />
-              <CardContent className="p-4">
-                <h3 className="font-semibold">My Track Title {i}</h3>
-                <p className="text-sm text-muted-foreground">Shared 2 days ago</p>
-                 <Button variant="link" size="sm" className="p-0 h-auto mt-1">View Post</Button>
-              </CardContent>
-            </Card>
-          ))}
-           <p className="text-sm text-muted-foreground col-span-full text-center p-4">No audio shared yet.</p>
+        <CardContent>
+          {audioLoading && (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Loading your audio...</p>
+            </div>
+          )}
+          {!audioLoading && userAudioPosts.length === 0 && (
+            <div className="text-center py-10 border rounded-lg">
+              <Music className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="mt-2 text-xl font-semibold">No Audio Shared Yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Click "Upload Audio" to share your first track!
+              </p>
+            </div>
+          )}
+          {!audioLoading && userAudioPosts.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {userAudioPosts.map(post => (
+                <Card key={post.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <div className="bg-muted aspect-video flex items-center justify-center">
+                     {/* In a real app, you might have a cover image or a music visualization */}
+                     <Music className="h-16 w-16 text-muted-foreground" />
+                  </div>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold truncate" title={post.title}>{post.title}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Uploaded {post.createdAt ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'recently'}
+                    </p>
+                    <audio controls className="w-full mt-2 h-10" src={post.audioUrl}>
+                        Your browser does not support the audio element.
+                         <a href={post.audioUrl} download={post.fileName}>Download audio</a>
+                    </audio>
+                    <div className="mt-2 flex gap-2">
+                        <Button variant="ghost" size="sm" asChild>
+                            <a href={post.audioUrl} target="_blank" rel="noopener noreferrer">
+                                <PlayCircle className="mr-1 h-4 w-4" /> Play
+                            </a>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild>
+                            <a href={post.audioUrl} download={post.fileName}>
+                                <Download className="mr-1 h-4 w-4" /> Download
+                            </a>
+                        </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
+    <UploadAudioDialog 
+        isOpen={isUploadAudioDialogOpen} 
+        onOpenChange={setIsUploadAudioDialogOpen}
+        onUploadSuccess={handleUploadSuccess}
+    />
+    </>
   );
 }
-
-    
