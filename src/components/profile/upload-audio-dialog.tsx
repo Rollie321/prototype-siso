@@ -79,13 +79,14 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       // 1. Upload to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const supabaseFileName = `${Date.now()}.${fileExt}`;
-      const supabasePath = `public/${currentUser.uid}/${supabaseFileName}`; // Ensure RLS allows this path
+      // The path includes the Firebase currentUser.uid, associating the file with the user.
+      const supabasePath = `public/${currentUser.uid}/${supabaseFileName}`; 
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(AUDIO_BUCKET_NAME)
         .upload(supabasePath, file, {
           cacheControl: '3600',
-          upsert: false, // true if you want to overwrite, false to error if exists
+          upsert: false, 
         });
 
       if (uploadError) {
@@ -120,15 +121,12 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       const saveResult = await saveAudioPostMetadata(metadata);
 
       if (!saveResult.success) {
-        // Optionally, try to delete the uploaded file from Supabase if Firestore save fails
-        // await supabase.storage.from(AUDIO_BUCKET_NAME).remove([uploadData.path]);
         throw new Error(saveResult.error || "Failed to save audio metadata.");
       }
 
       toast({ title: "Upload Successful!", description: `"${title}" has been shared.` });
-      onUploadSuccess(); // Trigger refresh
-      onOpenChange(false); // Close dialog
-      // Reset form
+      onUploadSuccess(); 
+      onOpenChange(false); 
       setTitle("");
       setFile(null);
       setFileNameDisplay(null);
