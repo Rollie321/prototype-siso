@@ -16,14 +16,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthContext } from "@/hooks/use-auth-context";
-import { supabase, AUDIO_BUCKET_NAME } from "@/lib/supabase";
-import { saveUploadMetadata } from "@/app/(app)/profile/actions"; // Updated import if function name changed
+import { saveUploadMetadata, generatePresignedUploadUrlB2 } from "@/app/(app)/profile/actions";
 import { Loader2, UploadCloud } from "lucide-react";
+import { B2_BUCKET_PUBLIC_URL_BASE } from "@/lib/backblazeClient";
+
 
 interface UploadAudioDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onUploadSuccess: () => void; // Callback to refresh audio list
+  onUploadSuccess: () => void;
 }
 
 export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: UploadAudioDialogProps) {
@@ -47,7 +48,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         });
         setFile(null);
         setFileNameDisplay(null);
-        e.target.value = ""; // Reset file input
+        e.target.value = ""; 
         return;
       }
       if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
@@ -58,7 +59,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         });
         setFile(null);
         setFileNameDisplay(null);
-        e.target.value = ""; // Reset file input
+        e.target.value = "";
         return;
       }
       setFile(selectedFile);
@@ -83,55 +84,67 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       toast({ variant: "destructive", title: "No Title", description: "Please enter a title for your audio." });
       return;
     }
+    if (!B2_BUCKET_PUBLIC_URL_BASE) {
+      toast({ variant: "destructive", title: "Configuration Error", description: "Bucket public URL base is not set." });
+      return;
+    }
 
     setIsLoading(true);
 
     try {
-      // 1. Upload to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const supabaseFileName = `${Date.now()}.${fileExt}`;
-      // The path includes the Firebase currentUser.uid, associating the file with the user.
-      const supabasePath = `public/${currentUser.uid}/${supabaseFileName}`; 
+      // 1. Get pre-signed URL from server action
+      const presignedUrlResult = await generatePresignedUploadUrlB2(file.name, file.type, currentUser.uid);
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(AUDIO_BUCKET_NAME)
-        .upload(supabasePath, file, {
-          cacheControl: '3600',
-          upsert: false, 
-        });
+      if (!presignedUrlResult.success || !presignedUrlResult.uploadUrl || !presignedUrlResult.filePath) {
+        throw new Error(presignedUrlResult.error || "Failed to get upload URL.");
+      }
 
-      if (uploadError) {
-        throw new Error(`Supabase upload error: ${uploadError.message}`);
+      const { uploadUrl, filePath } = presignedUrlResult;
+
+      // 2. Upload file to Backblaze B2 using the pre-signed URL
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        // Attempt to get more detailed error from B2 if possible
+        let b2ErrorMsg = `B2 upload failed with status: ${uploadResponse.status}`;
+        try {
+          const errorXml = await uploadResponse.text();
+          // Basic parsing for common B2 error format
+          const codeMatch = errorXml.match(/<Code>(.*?)<\/Code>/);
+          const messageMatch = errorXml.match(/<Message>(.*?)<\/Message>/);
+          if (codeMatch && messageMatch) {
+            b2ErrorMsg = `B2 Error (${codeMatch[1]}): ${messageMatch[1]}`;
+          } else if (errorXml.length < 200) { // Short error responses might be plain text
+            b2ErrorMsg = errorXml;
+          }
+        } catch (e) { /* Ignore parsing error, stick with status */ }
+        throw new Error(b2ErrorMsg);
       }
       
-      if (!uploadData?.path) {
-        throw new Error("Supabase upload returned no path.");
-      }
+      // 3. Construct the public URL
+      // Ensure no double slashes if B2_BUCKET_PUBLIC_URL_BASE ends with / and filePath starts with /
+      const publicFileUrl = `${B2_BUCKET_PUBLIC_URL_BASE.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`;
 
-      // 2. Get Public URL
-      const { data: publicUrlData } = supabase.storage
-        .from(AUDIO_BUCKET_NAME)
-        .getPublicUrl(uploadData.path);
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error("Could not get public URL from Supabase.");
-      }
-      
-      const audioUrl = publicUrlData.publicUrl;
-
-      // 3. Save metadata to Firestore
+      // 4. Save metadata to Firestore
       const metadata = {
         userId: currentUser.uid,
         title: title.trim(),
-        audioUrl: audioUrl,
-        supabasePath: uploadData.path,
+        fileUrl: publicFileUrl,
+        storagePath: filePath,
         fileName: file.name,
         fileType: file.type,
       };
 
-      const saveResult = await saveUploadMetadata(metadata); // Using the updated function name implicitly
+      const saveResult = await saveUploadMetadata(metadata);
 
       if (!saveResult.success) {
+        // Potentially try to delete the B2 file if Firestore save fails (more complex rollback)
         throw new Error(saveResult.error || "Failed to save upload metadata.");
       }
 
@@ -149,15 +162,24 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       setIsLoading(false);
     }
   };
+  
+  const resetForm = () => {
+    setTitle("");
+    setFile(null);
+    setFileNameDisplay(null);
+    // Also reset the actual file input element if possible
+    const fileInput = document.getElementById("audioFile-input") as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = "";
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!isLoading) { // Prevent closing while loading
+      if (!isLoading) { 
         onOpenChange(open);
-        if (!open) { // Reset form if dialog is closed
-          setTitle("");
-          setFile(null);
-          setFileNameDisplay(null);
+        if (!open) { 
+         resetForm();
         }
       }
     }}>
@@ -221,7 +243,7 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isLoading}>
+              <Button type="button" variant="outline" disabled={isLoading} onClick={() => { if (!isLoading) onOpenChange(false); resetForm();}}>
                 Cancel
               </Button>
             </DialogClose>

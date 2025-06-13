@@ -16,13 +16,12 @@ import { collection, query, where, getDocs, orderBy, Timestamp, type DocumentDat
 import { db } from "@/lib/firebase";
 import { formatDistanceToNow } from 'date-fns';
 
-
-interface UploadedItem extends DocumentData { // Renamed from AudioPost for generality, though still audio for now
+interface UploadedItem extends DocumentData {
   id: string;
   userId: string;
   title: string;
-  audioUrl: string; // This is the Supabase reference
-  supabasePath: string;
+  fileUrl: string; // URL of the file (e.g., on Backblaze B2)
+  storagePath: string; // Path within the storage service
   fileName: string;
   fileType: string;
   createdAt: Timestamp; 
@@ -32,8 +31,8 @@ export default function ProfilePage() {
   const { currentUser, sisoUser, loading: authLoading } = useAuthContext();
   const { toast } = useToast();
   const [isUploadAudioDialogOpen, setIsUploadAudioDialogOpen] = useState(false);
-  const [userUploads, setUserUploads] = useState<UploadedItem[]>([]); // Renamed state
-  const [uploadsLoading, setUploadsLoading] = useState(true); // Renamed state
+  const [userUploads, setUserUploads] = useState<UploadedItem[]>([]);
+  const [uploadsLoading, setUploadsLoading] = useState(true);
 
   const displayName = sisoUser?.fullName || sisoUser?.username || currentUser?.displayName || "User";
   const location = sisoUser?.location || "Unknown location";
@@ -46,18 +45,18 @@ export default function ProfilePage() {
   const spotifyLink = sisoUser?.spotifyLink;
   const youtubeLink = sisoUser?.youtubeLink;
 
-  const fetchUserUploads = useCallback(async () => { // Renamed function
+  const fetchUserUploads = useCallback(async () => {
     if (!currentUser?.uid) return;
     setUploadsLoading(true);
     try {
       const q = query(
-        collection(db, "Siso_uploads"), // Changed collection name
+        collection(db, "Siso_uploads"), 
         where("userId", "==", currentUser.uid),
         orderBy("createdAt", "desc")
       );
       const querySnapshot = await getDocs(q);
-      const posts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UploadedItem));
-      setUserUploads(posts);
+      const postsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UploadedItem));
+      setUserUploads(postsData);
     } catch (error) {
       console.error("Error fetching uploads:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not fetch your uploads." });
@@ -67,15 +66,14 @@ export default function ProfilePage() {
   }, [currentUser?.uid, toast]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !authLoading) { // Ensure auth is resolved before fetching
       fetchUserUploads();
     }
-  }, [currentUser, fetchUserUploads]);
+  }, [currentUser, authLoading, fetchUserUploads]);
 
   const handleUploadSuccess = () => {
     fetchUserUploads(); 
   };
-
 
   if (authLoading) {
     return (
@@ -108,6 +106,8 @@ export default function ProfilePage() {
   }
 
   if (!currentUser) {
+    // This state should ideally be brief if authLoading is false
+    // Or AppLayout would redirect to /login
     return (
       <div className="text-center py-10">
         <h1 className="text-2xl font-bold">Please log in</h1>
@@ -303,22 +303,28 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted-foreground">
                       Uploaded {upload.createdAt ? formatDistanceToNow(upload.createdAt.toDate(), { addSuffix: true }) : 'recently'}
                     </p>
-                    <audio controls className="w-full mt-2 h-10" src={upload.audioUrl}>
-                        Your browser does not support the audio element.
-                         <a href={upload.audioUrl} download={upload.fileName}>Download audio</a>
-                    </audio>
-                    <div className="mt-2 flex gap-2">
-                        <Button variant="ghost" size="sm" asChild>
-                            <a href={upload.audioUrl} target="_blank" rel="noopener noreferrer">
-                                <PlayCircle className="mr-1 h-4 w-4" /> Play
-                            </a>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                            <a href={upload.audioUrl} download={upload.fileName}>
-                                <Download className="mr-1 h-4 w-4" /> Download
-                            </a>
-                        </Button>
-                    </div>
+                    {upload.fileUrl ? (
+                      <>
+                        <audio controls className="w-full mt-2 h-10" src={upload.fileUrl}>
+                            Your browser does not support the audio element.
+                            <a href={upload.fileUrl} download={upload.fileName}>Download audio</a>
+                        </audio>
+                        <div className="mt-2 flex gap-2">
+                            <Button variant="ghost" size="sm" asChild>
+                                <a href={upload.fileUrl} target="_blank" rel="noopener noreferrer">
+                                    <PlayCircle className="mr-1 h-4 w-4" /> Play
+                                </a>
+                            </Button>
+                            <Button variant="ghost" size="sm" asChild>
+                                <a href={upload.fileUrl} download={upload.fileName}>
+                                    <Download className="mr-1 h-4 w-4" /> Download
+                                </a>
+                            </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-destructive mt-2">Audio URL missing.</p>
+                    )}
                   </CardContent>
                 </Card>
               ))}

@@ -13,4 +13,5 @@ if (!supabaseAnonKey) {
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
-export const AUDIO_BUCKET_NAME = 'siso-audio-uploads';
+// This constant is no longer used for new uploads with Backblaze B2 integration.
+// export const AUDIO_BUCKET_NAME = 'siso-audio-uploads';

@@ -5,6 +5,9 @@ import { auth, db } from "@/lib/firebase";
 import { updateProfile } from "firebase/auth";
 import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import type { SisoUser } from "@/contexts/auth-context";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { b2S3Client, B2_BUCKET_NAME } from "@/lib/backblazeClient";
 
 export type UpdateUserProfileData = {
   fullName?: string;
@@ -55,25 +58,24 @@ export async function updateUserProfile(
   }
 }
 
-export interface UploadMetadata {
-  userId: string; // Owner
+export interface UploadMetadataInput { // Renamed from UploadMetadata for clarity with Firestore type
+  userId: string;
   title: string;
-  audioUrl: string; // Reference to access the file in Supabase
-  supabasePath: string;
+  fileUrl: string; // Public URL of the file (e.g., on Backblaze B2)
+  storagePath: string; // Path within the storage service (e.g., public/userId/filename.ext)
   fileName: string;
   fileType: string;
-  createdAt: any; // Will be Firestore serverTimestamp
 }
 
 export async function saveUploadMetadata(
-  metadata: Omit<UploadMetadata, 'createdAt'>
+  metadata: UploadMetadataInput
 ): Promise<{ success: boolean; error?: string; id?: string }> {
-  if (!metadata.userId || !metadata.title || !metadata.audioUrl || !metadata.supabasePath) {
+  if (!metadata.userId || !metadata.title || !metadata.fileUrl || !metadata.storagePath) {
     return { success: false, error: "Missing required upload metadata." };
   }
 
   try {
-    const uploadsCollectionRef = collection(db, "Siso_uploads"); // Changed collection name
+    const uploadsCollectionRef = collection(db, "Siso_uploads");
     const docRef = await addDoc(uploadsCollectionRef, {
       ...metadata,
       createdAt: serverTimestamp(),
@@ -82,5 +84,39 @@ export async function saveUploadMetadata(
   } catch (error: any) {
     console.error("Error saving upload metadata:", error);
     return { success: false, error: error.message || "Failed to save upload metadata." };
+  }
+}
+
+export async function generatePresignedUploadUrlB2(
+  originalFileName: string,
+  fileType: string,
+  userId: string
+): Promise<{ success: boolean; uploadUrl?: string; filePath?: string; error?: string }> {
+  if (!userId) {
+    return { success: false, error: "User ID is required to generate upload URL." };
+  }
+  if (!B2_BUCKET_NAME) {
+    return { success: false, error: "Backblaze B2 bucket name is not configured." };
+  }
+
+  // Sanitize filename and create a unique path
+  const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uniqueFileName = `${Date.now()}-${sanitizedFileName}`;
+  const filePath = `public/${userId}/${uniqueFileName}`;
+
+  try {
+    const command = new PutObjectCommand({
+      Bucket: B2_BUCKET_NAME,
+      Key: filePath,
+      ContentType: fileType,
+      // ACL: 'public-read', // If you want to make files public immediately. B2 might handle this via bucket settings.
+    });
+
+    const uploadUrl = await getSignedUrl(b2S3Client, command, { expiresIn: 300 }); // URL expires in 5 minutes
+
+    return { success: true, uploadUrl, filePath };
+  } catch (error: any) {
+    console.error("Error generating pre-signed URL for B2:", error);
+    return { success: false, error: error.message || "Failed to generate upload URL." };
   }
 }
