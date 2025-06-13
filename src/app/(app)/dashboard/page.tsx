@@ -1,8 +1,10 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { Activity, ArrowUpRight, Users, Music2, MessageSquare, Wand2 } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const quickLinks = [
   { title: "Find Musicians", href: "/search", icon: Users, description: "Discover new collaborators." },
@@ -44,7 +46,10 @@ export default function DashboardPage() {
             <div className="space-y-4">
               {[1,2,3,4].map(i => (
                 <div key={i} className="flex items-center p-2 rounded-md hover:bg-muted/50">
-                  <AvatarImage src={`https://placehold.co/40x40.png?text=A${i}`} alt="User" className="h-10 w-10 rounded-full mr-3" data-ai-hint="user avatar" />
+                  <Avatar className="h-10 w-10 mr-3">
+                    <AvatarImage src={`https://placehold.co/40x40.png?text=A${i}`} alt={`User ${i} avatar`} data-ai-hint="user avatar" />
+                    <AvatarFallback>A{i}</AvatarFallback>
+                  </Avatar>
                   <div>
                     <p className="text-sm font-medium">User {i} posted a new track: "Song Title {i}"</p>
                     <p className="text-xs text-muted-foreground">2 hours ago</p>
