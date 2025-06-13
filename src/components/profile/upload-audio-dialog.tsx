@@ -115,28 +115,25 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
         let b2ErrorMsg = `B2 upload failed with status: ${uploadResponse.status}`;
         try {
           const errorXml = await uploadResponse.text();
-          // Basic parsing for common B2 error format
           const codeMatch = errorXml.match(/<Code>(.*?)<\/Code>/);
           const messageMatch = errorXml.match(/<Message>(.*?)<\/Message>/);
           if (codeMatch && messageMatch) {
             b2ErrorMsg = `B2 Error (${codeMatch[1]}): ${messageMatch[1]}`;
-          } else if (errorXml.length < 200) { // Short error responses might be plain text
+          } else if (errorXml.length < 200) { 
             b2ErrorMsg = errorXml;
           }
         } catch (e) { /* Ignore parsing error, stick with status */ }
         throw new Error(b2ErrorMsg);
       }
       
-      // 3. Construct the public URL
-      // Ensure no double slashes if B2_BUCKET_PUBLIC_URL_BASE ends with / and filePath starts with /
       const publicFileUrl = `${B2_BUCKET_PUBLIC_URL_BASE.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`;
 
       // 4. Save metadata to Firestore
       const metadata = {
         userId: currentUser.uid,
         title: title.trim(),
-        fileUrl: publicFileUrl,
-        storagePath: filePath,
+        fileUrl: publicFileUrl, // This is the B2 public URL
+        storagePath: filePath, // This is the path within B2
         fileName: file.name,
         fileType: file.type,
       };
@@ -144,7 +141,6 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       const saveResult = await saveUploadMetadata(metadata);
 
       if (!saveResult.success) {
-        // Potentially try to delete the B2 file if Firestore save fails (more complex rollback)
         throw new Error(saveResult.error || "Failed to save upload metadata.");
       }
 
@@ -154,10 +150,17 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
       setTitle("");
       setFile(null);
       setFileNameDisplay(null);
+      const fileInput = document.getElementById("audioFile-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+
 
     } catch (error: any) {
       console.error("Upload failed:", error);
-      toast({ variant: "destructive", title: "Upload Failed", description: error.message || "An unexpected error occurred." });
+      let description = error.message || "An unexpected error occurred.";
+      if (error.message && error.message.toLowerCase().includes("failed to fetch")) {
+        description += " This might be a CORS issue. Please check your Backblaze B2 bucket's CORS configuration to allow PUT requests from this origin.";
+      }
+      toast({ variant: "destructive", title: "Upload Failed", description });
     } finally {
       setIsLoading(false);
     }
@@ -167,7 +170,6 @@ export function UploadAudioDialog({ isOpen, onOpenChange, onUploadSuccess }: Upl
     setTitle("");
     setFile(null);
     setFileNameDisplay(null);
-    // Also reset the actual file input element if possible
     const fileInput = document.getElementById("audioFile-input") as HTMLInputElement;
     if (fileInput) {
       fileInput.value = "";
