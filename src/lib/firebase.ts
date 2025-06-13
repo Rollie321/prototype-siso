@@ -1,6 +1,9 @@
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import {
+  getAuth,
+  type Auth
+} from 'firebase/auth'; // Removed browser-specific imports like initializeAuth, indexedDBLocalPersistence
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -22,6 +25,9 @@ if (getApps().length === 0) {
   app = getApps()[0];
 }
 
+// getAuth() will initialize Auth if it hasn't been already for the given app.
+// On the client, it defaults to indexedDBLocalPersistence if available.
+// This is safe for both server and client environments.
 auth = getAuth(app);
 db = getFirestore(app);
 
